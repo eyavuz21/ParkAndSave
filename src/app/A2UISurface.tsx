@@ -25,9 +25,20 @@ function openMapForAction(message: A2UIClientEventMessage, origin: Origin) {
   const destination = str(ctx.destination) || str(ctx.place) || str(ctx.name);
   const search = str(ctx.search);
   const url = str(ctx.url) || str(ctx.href) || str(ctx.link);
+  // A full multi-stop route: origin → each stop in order.
+  const stops = Array.isArray(ctx.stops)
+    ? (ctx.stops as unknown[]).map((s) => str(s)).filter(Boolean) as string[]
+    : [];
 
   let target: string | undefined;
-  if (lat != null && lng != null) {
+  if (stops.length > 0) {
+    const dest = stops[stops.length - 1];
+    const waypoints = stops.slice(0, -1);
+    const wpParam = waypoints.length
+      ? `&waypoints=${waypoints.map(encodeURIComponent).join("|")}`
+      : "";
+    target = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${encodeURIComponent(dest)}${wpParam}`;
+  } else if (lat != null && lng != null) {
     target = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${lat},${lng}`;
   } else if (destination) {
     target = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${encodeURIComponent(destination)}`;
