@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { CopilotPopup } from "@copilotkit/react-ui";
 import { useCopilotAction, useCopilotReadable } from "@copilotkit/react-core";
 import { A2UISurface, TripRoute } from "./A2UISurface";
@@ -59,7 +60,9 @@ function extractStops(
 export default function Home() {
   // Detect the user's current location and make it readable to the agent, so
   // "find parking near me" works without typing an address.
-  const { location, status } = useUserLocation();
+  const { location, status, refresh, setManual } = useUserLocation();
+  const [editingLoc, setEditingLoc] = useState(false);
+  const [locInput, setLocInput] = useState("");
   useCopilotReadable({
     description:
       "The user's current location from their device. Use this as the default " +
@@ -269,15 +272,63 @@ export default function Home() {
         Click the chat bubble (bottom-right) and try one of those. 👉
       </p>
 
-      <p className="text-xs text-gray-400">
-        {status === "ready" && location
-          ? `📍 Using your location: ${location.label}`
-          : status === "locating"
-            ? "📍 Detecting your location…"
-            : status === "denied"
-              ? "📍 Location off — just tell me a place name instead."
-              : ""}
-      </p>
+      <div className="flex flex-col items-center gap-1 text-xs text-gray-500">
+        <div className="flex items-center gap-2">
+          <span>
+            {status === "ready" && location
+              ? `📍 ${location.label.split(",").slice(0, 3).join(", ")}`
+              : status === "locating"
+                ? "📍 Detecting your location…"
+                : status === "denied"
+                  ? "📍 Location unavailable"
+                  : "📍 …"}
+          </span>
+          {status !== "locating" && (
+            <>
+              <button
+                type="button"
+                onClick={refresh}
+                className="underline hover:text-emerald-600"
+              >
+                refresh
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLocInput("");
+                  setEditingLoc((v) => !v);
+                }}
+                className="underline hover:text-emerald-600"
+              >
+                change
+              </button>
+            </>
+          )}
+        </div>
+        {editingLoc && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setManual(locInput);
+              setEditingLoc(false);
+            }}
+            className="flex items-center gap-1"
+          >
+            <input
+              value={locInput}
+              onChange={(e) => setLocInput(e.target.value)}
+              placeholder="Type your area, e.g. Camden, London"
+              className="w-56 rounded border border-gray-300 px-2 py-1 text-xs"
+            />
+            <button
+              type="submit"
+              className="rounded bg-emerald-600 px-2 py-1 text-white"
+            >
+              Set
+            </button>
+          </form>
+        )}
+      </div>
 
       <footer className="mt-6 max-w-md text-xs leading-relaxed text-gray-400">
         Powered by CopilotKit · AG-UI · A2UI · LinkUp · OpenStreetMap.

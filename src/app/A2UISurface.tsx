@@ -1,12 +1,23 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import {
   A2UIProvider,
   A2UIRenderer,
   useA2UIActions,
   type A2UIClientEventMessage,
 } from "@copilotkit/a2ui-renderer";
+
+// Leaflet touches `window`, so load the map client-side only (no SSR).
+const RouteMap = dynamic(() => import("./RouteMap").then((m) => m.RouteMap), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-60 items-center justify-center rounded-lg bg-gray-100 text-sm text-gray-400">
+      Loading map…
+    </div>
+  ),
+});
 
 const CATALOG_ID = "https://a2ui.org/specification/v0_9/basic_catalog.json";
 
@@ -81,6 +92,9 @@ export function TripRoute({ stops, origin }: { stops: Stop[]; origin?: Origin })
     <div className="my-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-left">
       <div className="mb-2 text-sm font-semibold text-emerald-800">
         🗺️ Your full route
+      </div>
+      <div className="mb-3">
+        <RouteMap stops={clean} origin={origin} />
       </div>
       <ol className="mb-3 ml-5 list-decimal text-sm text-gray-700">
         {origin ? <li>You are here</li> : null}
