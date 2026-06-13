@@ -18,7 +18,10 @@ AVAILABLE COMPONENTS (only use these):
 - Row:     { id, component:"Row", children:["id1","id2"], align?, justify? }       // horizontal
 - Card:    { id, component:"Card", child:"oneId" }                                  // ONE child only
 - Divider: { id, component:"Divider" }
-- Button:  { id, component:"Button", child:"textId", action:{ event:{ name:"open", context:{ url:"https://..." } } } }
+- Button:  { id, component:"Button", child:"textId", action:{ event:{ name:"open", context:{ destination:"Full place name, street, area" } } } }
+  EVERY Button MUST have action.event.context. Clicking opens a MAP with directions.
+  • For a specific place (a named shop or car park), set context.destination to its full name + street + area, e.g. "Waitrose, Tower Bridge Road, SE1". Include context.lat and context.lng (numbers) too if you know them.
+  • For a generic 'find X' button, instead set context.search, e.g. "bakery near Tower Bridge".
 - Image:   { id, component:"Image", url:"https://...", description:"alt text" }
 Example: a list of cards -> a "root" Column whose children are several Card ids; each Card's child is a Column of Text components.`;
 
@@ -176,6 +179,7 @@ export default function Home() {
           <A2UISurface
             surfaceId={String(args?.surfaceId || "surface")}
             components={components!}
+            origin={location ? { lat: location.lat, lng: location.lng } : undefined}
           />
         </div>
       );
@@ -246,6 +250,7 @@ TOOLS:
 - findNearbyShops: list real nearby supermarkets from OpenStreetMap for a shopping trip.
 - render_a2ui: display results as nice A2UI cards.
 HOW TO RESPOND:
+- IMPORTANT: Call tools ONE AT A TIME. Never call more than one tool in a single step — make a call, wait for its result, then make the next. One searchLiveWeb call is enough; do not fire several at once.
 - For PARKING: call searchLiveWeb, then render_a2ui (one card per car park: name, price, link button).
 - For SHOPPING: call findNearbyShops, then render_a2ui (one card per shop: name, distance).
 - For a full TRIP / 'do my shopping' / 'plan my trip': call BOTH findNearbyShops and searchLiveWeb (for parking near the shops), then render_a2ui ONCE as a combined trip plan — a section of shop cards and a section of parking cards.

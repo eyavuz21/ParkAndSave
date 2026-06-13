@@ -70,6 +70,8 @@ export async function POST(req: NextRequest) {
       return {
         name,
         brand: e.tags?.brand,
+        lat: la,
+        lng: lo,
         distance: metres(lat!, lng!, la, lo),
       };
     })

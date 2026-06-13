@@ -5,9 +5,40 @@ import {
   A2UIProvider,
   A2UIRenderer,
   useA2UIActions,
+  type A2UIClientEventMessage,
 } from "@copilotkit/a2ui-renderer";
 
 const CATALOG_ID = "https://a2ui.org/specification/v0_9/basic_catalog.json";
+
+type Origin = { lat: number; lng: number } | undefined;
+
+// Turns a clicked A2UI button into a map. If we know the user's location we
+// open turn-by-turn directions to the place; otherwise we just show the place.
+function openMapForAction(message: A2UIClientEventMessage, origin: Origin) {
+  const ctx = (message?.userAction?.context ?? {}) as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+  const num = (v: unknown) => (typeof v === "number" ? v : undefined);
+
+  const originParam = origin ? `&origin=${origin.lat},${origin.lng}` : "";
+  const lat = num(ctx.lat);
+  const lng = num(ctx.lng);
+  const destination = str(ctx.destination) || str(ctx.place) || str(ctx.name);
+  const search = str(ctx.search);
+  const url = str(ctx.url) || str(ctx.href) || str(ctx.link);
+
+  let target: string | undefined;
+  if (lat != null && lng != null) {
+    target = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${lat},${lng}`;
+  } else if (destination) {
+    target = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${encodeURIComponent(destination)}`;
+  } else if (search) {
+    target = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(search)}`;
+  } else if (url) {
+    target = url;
+  }
+
+  if (target) window.open(target, "_blank", "noopener,noreferrer");
+}
 
 function Feed({
   surfaceId,
@@ -47,16 +78,19 @@ function Feed({
 /**
  * Renders an agent-generated A2UI v0.9 component tree. Each call mounts its own
  * isolated A2UI surface (provider + renderer) and feeds in the components.
+ * Clicking a card's button opens a map with directions to that place.
  */
 export function A2UISurface({
   surfaceId,
   components,
+  origin,
 }: {
   surfaceId: string;
   components: Array<Record<string, unknown>>;
+  origin?: Origin;
 }) {
   return (
-    <A2UIProvider>
+    <A2UIProvider onAction={(message) => openMapForAction(message, origin)}>
       <Feed surfaceId={surfaceId} components={components} />
     </A2UIProvider>
   );
