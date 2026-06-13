@@ -2,7 +2,7 @@
 
 import { CopilotPopup } from "@copilotkit/react-ui";
 import { useCopilotAction, useCopilotReadable } from "@copilotkit/react-core";
-import { A2UISurface } from "./A2UISurface";
+import { A2UISurface, TripRoute } from "./A2UISurface";
 import { useUserLocation } from "./useUserLocation";
 
 // Compact A2UI authoring spec injected into the agent so it can generate
@@ -186,6 +186,46 @@ export default function Home() {
     },
   });
 
+  // TOOL 4 — one map of a whole multi-stop journey. The agent hands over the
+  // stops in visit order and we build the route (you → car park → shop → shop).
+  useCopilotAction({
+    name: "showTripRoute",
+    description:
+      "Show ONE map of a whole journey when the trip visits more than one place " +
+      "(e.g. car park then two shops). Pass the stops in the exact order to " +
+      "travel. Always call this for a combined parking + shopping trip so the " +
+      "user gets a single optimised route.",
+    parameters: [
+      {
+        name: "route",
+        type: "string",
+        description:
+          "The ordered stops as place names separated by semicolons — the car " +
+          "park first (if driving), then each shop in visit order. Example: " +
+          "'Q-Park Westminster, SW1; Aldi, Tottenham Court Road; Tesco, Soho'.",
+        required: true,
+      },
+    ],
+    handler: async () => "The full route map has been shown to the user.",
+    render: ({ args }) => {
+      const route = typeof args?.route === "string" ? args.route : "";
+      const stops = route
+        .split(";")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((name) => ({ name }));
+      if (stops.length === 0) {
+        return <div className="my-2 text-sm text-gray-400">🗺️ Building route…</div>;
+      }
+      return (
+        <TripRoute
+          stops={stops}
+          origin={location ? { lat: location.lat, lng: location.lng } : undefined}
+        />
+      );
+    },
+  });
+
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-5 bg-gradient-to-b from-emerald-50 via-white to-white p-8 text-center">
       <div className="text-6xl">🅿️</div>
@@ -257,7 +297,11 @@ HOW TO RESPOND:
    💰 CHEAPEST ROUTE — a multi-stop route that splits the list across the best-value stores (Aldi, Lidl, Co-op for staples; others for specifics), ordered by location to minimise backtracking, with the estimated saving.
    ⚖️ BALANCED ROUTE (the recommended one) — this MUST be a real TWO-STOP journey combining cheap + fast: stop 1 = a budget store (Aldi/Lidl/Co-op) for the cheap staples, stop 2 = a closer/convenient store for the rest or fresh items.
    EACH route Card gets EXACTLY ONE Button labelled "🗺️ Map full route" (never separate buttons per store). Its action.event.context.stops MUST be the ORDERED array of EVERY stop on that route, each as "Store name, street, area" (add the store's lat/lng numbers if known). Clicking opens the WHOLE multi-stop journey on one map (your location → stop 1 → stop 2 → …). For the BALANCED route stops MUST contain BOTH stores in visit order. List each route's stops in order with estimated total distance/time.
-- For a full TRIP / 'do my shopping' / 'plan my trip': call findNearbyShops AND searchLiveWeb (parking near those shops), then render_a2ui ONCE: the FASTEST / CHEAPEST / BALANCED shopping routes PLUS a section of parking cards. For the recommended BALANCED route, make its "View full route" stops begin with the chosen car park, then the stores in order — so the map shows park → shop → shop.
+- For a COMBINED TRIP (driving + shopping — 'do my shopping', 'plan my trip', or a fastest+cheapest run where the items need 2 stores): work out ONE optimised journey, then show it AND map it:
+   1) call findNearbyShops; 2) call searchLiveWeb for nearby car parks;
+   3) pick the journey: the cheapest + nearest car park, then the best store(s) (usually 2) that cover the list while balancing cost and walking, in sensible visit order;
+   4) call render_a2ui to show one short card per stop IN VISIT ORDER (the car park with its price, then each store with its items/distance);
+   5) FINALLY call showTripRoute with route = the stop names separated by semicolons, in visit order, car park first — e.g. "Q-Park SE1; Aldi, Tottenham Court Rd; Tesco, Soho". This gives the user ONE map of the whole journey: you → car park → shop → shop.
 CRITICAL RULE: The A2UI cards ARE the complete answer. After render_a2ui, your final text reply MUST be at most ONE short sentence (a single tip). You are STRICTLY FORBIDDEN from repeating the options as a markdown table or list. Repeating the details is a failure.`}
         labels={{
           title: "ParkAndSave",

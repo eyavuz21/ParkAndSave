@@ -51,6 +51,55 @@ function openMapForAction(message: A2UIClientEventMessage, origin: Origin) {
   if (target) window.open(target, "_blank", "noopener,noreferrer");
 }
 
+export type Stop = { name: string; lat?: number; lng?: number };
+
+// Builds one Google Maps URL for a whole journey: origin → each stop in order.
+function buildMultiStopUrl(stops: Stop[], origin: Origin): string | undefined {
+  const toPoint = (s: Stop) =>
+    typeof s.lat === "number" && typeof s.lng === "number"
+      ? `${s.lat},${s.lng}`
+      : (s.name || "").trim();
+  const points = stops.map(toPoint).filter(Boolean);
+  if (points.length === 0) return undefined;
+  const dest = points[points.length - 1];
+  const waypoints = points.slice(0, -1);
+  const originParam = origin ? `&origin=${origin.lat},${origin.lng}` : "";
+  const wpParam = waypoints.length
+    ? `&waypoints=${waypoints.map(encodeURIComponent).join("|")}`
+    : "";
+  return `https://www.google.com/maps/dir/?api=1${originParam}&destination=${encodeURIComponent(dest)}${wpParam}`;
+}
+
+/** One tappable map of a whole multi-stop journey (you → each stop in order). */
+export function TripRoute({ stops, origin }: { stops: Stop[]; origin?: Origin }) {
+  const clean = (stops || []).filter(
+    (s) => s && (s.name || (s.lat != null && s.lng != null)),
+  );
+  const url = buildMultiStopUrl(clean, origin);
+  if (!url || clean.length === 0) return null;
+  return (
+    <div className="my-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-left">
+      <div className="mb-2 text-sm font-semibold text-emerald-800">
+        🗺️ Your full route
+      </div>
+      <ol className="mb-3 ml-5 list-decimal text-sm text-gray-700">
+        {origin ? <li>You are here</li> : null}
+        {clean.map((s, i) => (
+          <li key={i}>{s.name}</li>
+        ))}
+      </ol>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-block rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+      >
+        Open route in Google Maps →
+      </a>
+    </div>
+  );
+}
+
 function Feed({
   surfaceId,
   components,
