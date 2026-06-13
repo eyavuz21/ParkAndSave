@@ -20,10 +20,41 @@ AVAILABLE COMPONENTS (only use these):
 - Divider: { id, component:"Divider" }
 - Button:  { id, component:"Button", child:"textId", action:{ event:{ name:"open", context:{ destination:"Full place name, street, area" } } } }
   EVERY Button MUST have action.event.context. Clicking opens a MAP with directions.
-  • For a specific place (a named shop or car park), set context.destination to its full name + street + area, e.g. "Waitrose, Tower Bridge Road, SE1". Include context.lat and context.lng (numbers) too if you know them.
+  • For a specific place (a named shop or car park), ALWAYS set context.destination to its full name + street + area, e.g. "Waitrose, Tower Bridge Road, SE1" — do this even if you also know a booking url. Include context.lat and context.lng (numbers) too if you know them. The app reads these destinations to build one combined route map of the whole trip.
   • For a generic 'find X' button, instead set context.search, e.g. "bakery near Tower Bridge".
 - Image:   { id, component:"Image", url:"https://...", description:"alt text" }
 Example: a list of cards -> a "root" Column whose children are several Card ids; each Card's child is a Column of Text components.`;
+
+// Pulls the ordered list of real places out of an agent-generated A2UI tree, so
+// we can ALWAYS build one combined route map (you → stop → stop) in code —
+// without relying on the agent to call a separate tool.
+function extractStops(
+  components: Array<Record<string, unknown>>,
+): { name: string; lat?: number; lng?: number }[] {
+  const stops: { name: string; lat?: number; lng?: number }[] = [];
+  const seen = new Set<string>();
+  for (const c of components) {
+    const comp = c as {
+      component?: string;
+      action?: { event?: { context?: Record<string, unknown> } };
+    };
+    if (comp.component !== "Button") continue;
+    const ctx = comp.action?.event?.context ?? {};
+    const lat = typeof ctx.lat === "number" ? ctx.lat : undefined;
+    const lng = typeof ctx.lng === "number" ? ctx.lng : undefined;
+    const name =
+      (typeof ctx.destination === "string" && ctx.destination) ||
+      (typeof ctx.place === "string" && ctx.place) ||
+      (typeof ctx.name === "string" && ctx.name) ||
+      undefined;
+    if (!name && (lat == null || lng == null)) continue;
+    const key = (name || `${lat},${lng}`).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    stops.push({ name: name || `${lat},${lng}`, lat, lng });
+  }
+  return stops;
+}
 
 export default function Home() {
   // Detect the user's current location and make it readable to the agent, so
@@ -174,54 +205,34 @@ export default function Home() {
           <div className="my-2 text-sm text-gray-400">🎨 Generating UI…</div>
         );
       }
+      // Deterministically derive one combined route map from the places the
+      // agent just rendered — so "you → car park → shop → shop" always appears
+      // when the plan has 2+ places, no extra agent step required.
+      const origin = location
+        ? { lat: location.lat, lng: location.lng }
+        : undefined;
+      // Order the journey sensibly: ONE car park first (you drive & park), then
+      // the shops in order — regardless of how the agent ordered the cards.
+      const allStops = extractStops(components!);
+      const isParking = (n: string) =>
+        /car ?park|q-?park|ncp|just ?park|parking|garage/i.test(n);
+      const stops = [
+        ...allStops.filter((s) => isParking(s.name)).slice(0, 1),
+        ...allStops.filter((s) => !isParking(s.name)),
+      ];
       return (
         <div className="my-2 rounded-xl border border-gray-200 p-3">
           <A2UISurface
             surfaceId={String(args?.surfaceId || "surface")}
             components={components!}
-            origin={location ? { lat: location.lat, lng: location.lng } : undefined}
+            origin={origin}
           />
+          {stops.length >= 2 && (
+            <div className="mt-3">
+              <TripRoute stops={stops.slice(0, 8)} origin={origin} />
+            </div>
+          )}
         </div>
-      );
-    },
-  });
-
-  // TOOL 4 — one map of a whole multi-stop journey. The agent hands over the
-  // stops in visit order and we build the route (you → car park → shop → shop).
-  useCopilotAction({
-    name: "showTripRoute",
-    description:
-      "Show ONE map of a whole journey when the trip visits more than one place " +
-      "(e.g. car park then two shops). Pass the stops in the exact order to " +
-      "travel. Always call this for a combined parking + shopping trip so the " +
-      "user gets a single optimised route.",
-    parameters: [
-      {
-        name: "route",
-        type: "string",
-        description:
-          "The ordered stops as place names separated by semicolons — the car " +
-          "park first (if driving), then each shop in visit order. Example: " +
-          "'Q-Park Westminster, SW1; Aldi, Tottenham Court Road; Tesco, Soho'.",
-        required: true,
-      },
-    ],
-    handler: async () => "The full route map has been shown to the user.",
-    render: ({ args }) => {
-      const route = typeof args?.route === "string" ? args.route : "";
-      const stops = route
-        .split(";")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((name) => ({ name }));
-      if (stops.length === 0) {
-        return <div className="my-2 text-sm text-gray-400">🗺️ Building route…</div>;
-      }
-      return (
-        <TripRoute
-          stops={stops}
-          origin={location ? { lat: location.lat, lng: location.lng } : undefined}
-        />
       );
     },
   });
@@ -300,8 +311,8 @@ HOW TO RESPOND:
 - For a COMBINED TRIP (driving + shopping — 'do my shopping', 'plan my trip', or a fastest+cheapest run where the items need 2 stores): work out ONE optimised journey, then show it AND map it:
    1) call findNearbyShops; 2) call searchLiveWeb for nearby car parks;
    3) pick the journey: the cheapest + nearest car park, then the best store(s) (usually 2) that cover the list while balancing cost and walking, in sensible visit order;
-   4) call render_a2ui to show one short card per stop IN VISIT ORDER (the car park with its price, then each store with its items/distance);
-   5) FINALLY call showTripRoute with route = the stop names separated by semicolons, in visit order, car park first — e.g. "Q-Park SE1; Aldi, Tottenham Court Rd; Tesco, Soho". This gives the user ONE map of the whole journey: you → car park → shop → shop.
+   4) call render_a2ui to show one short card per stop IN VISIT ORDER — the car park FIRST (with its price), then each store (with its items/distance). Each card MUST have a button tagged with that place's context.destination (name + area) and lat/lng if known.
+   The app then AUTOMATICALLY adds ONE combined route map below the cards (you → car park → shop → shop) built from those places — you do NOT need to call any extra tool for the map. Just keep the cards in correct visit order, car park first.
 CRITICAL RULE: The A2UI cards ARE the complete answer. After render_a2ui, your final text reply MUST be at most ONE short sentence (a single tip). You are STRICTLY FORBIDDEN from repeating the options as a markdown table or list. Repeating the details is a failure.`}
         labels={{
           title: "ParkAndSave",
