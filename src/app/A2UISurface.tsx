@@ -81,6 +81,29 @@ function buildMultiStopUrl(stops: Stop[], origin: Origin): string | undefined {
   return `https://www.google.com/maps/dir/?api=1${originParam}&destination=${encodeURIComponent(dest)}${wpParam}`;
 }
 
+// Small circular badge that matches the numbered pins on the map.
+function Badge({ label, color }: { label: string; color: string }) {
+  return (
+    <span
+      style={{
+        background: color,
+        color: "#fff",
+        width: 22,
+        height: 22,
+        borderRadius: "50%",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 12,
+        fontWeight: 700,
+        flexShrink: 0,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 /** One tappable map of a whole multi-stop journey (you → each stop in order). */
 export function TripRoute({ stops, origin }: { stops: Stop[]; origin?: Origin }) {
   const clean = (stops || []).filter(
@@ -96,12 +119,20 @@ export function TripRoute({ stops, origin }: { stops: Stop[]; origin?: Origin })
       <div className="mb-3">
         <RouteMap stops={clean} origin={origin} />
       </div>
-      <ol className="mb-3 ml-5 list-decimal text-sm text-gray-700">
-        {origin ? <li>You are here</li> : null}
+      <ul className="mb-3 space-y-1.5">
+        {origin ? (
+          <li className="flex items-center gap-2 text-sm text-gray-700">
+            <Badge label="★" color="#3b82f6" />
+            <span>You are here</span>
+          </li>
+        ) : null}
         {clean.map((s, i) => (
-          <li key={i}>{s.name}</li>
+          <li key={i} className="flex items-center gap-2 text-sm text-gray-700">
+            <Badge label={String(i + 1)} color="#059669" />
+            <span>{s.name}</span>
+          </li>
         ))}
-      </ol>
+      </ul>
       <a
         href={url}
         target="_blank"
