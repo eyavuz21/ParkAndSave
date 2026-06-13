@@ -252,8 +252,11 @@ TOOLS:
 HOW TO RESPOND:
 - IMPORTANT: Call tools ONE AT A TIME. Never call more than one tool in a single step — make a call, wait for its result, then make the next. One searchLiveWeb call is enough; do not fire several at once.
 - For PARKING: call searchLiveWeb, then render_a2ui (one card per car park: name, price, link button).
-- For SHOPPING: call findNearbyShops, then render_a2ui (one card per shop: name, distance).
-- For a full TRIP / 'do my shopping' / 'plan my trip': call BOTH findNearbyShops and searchLiveWeb (for parking near the shops), then render_a2ui ONCE as a combined trip plan — a section of shop cards and a section of parking cards.
+- For SHOPPING (a shopping list, or 'cheapest'/'fastest' shop): call findNearbyShops to get ALL nearby supermarkets with their distances and brands, then act as a ROUTE OPTIMISER considering every store at once. Render_a2ui ONCE with TWO route options the user can compare, each as its own Card:
+   ⚡ FASTEST ROUTE — the single closest store that can cover the whole list (least travel). Show the store, distance and estimated time.
+   💰 CHEAPEST ROUTE — a multi-stop route that splits the list across the best-value stores (budget chains like Aldi, Lidl, Co-op for staples; others for specifics), ordered by location to minimise backtracking. List the stops in order with estimated total distance/time and the estimated saving versus shopping at one premium store.
+   Give each route a 'Get Directions' button (destination = the first stop). Briefly note the trade-off (fastest = less walking, cheapest = a bit more walking for a lower basket).
+- For a full TRIP / 'do my shopping' / 'plan my trip': call findNearbyShops AND searchLiveWeb (parking near those shops), then render_a2ui ONCE as a combined plan — the FASTEST vs CHEAPEST shopping routes above, plus a section of parking cards.
 CRITICAL RULE: The A2UI cards ARE the complete answer. After render_a2ui, your final text reply MUST be at most ONE short sentence (a single tip). You are STRICTLY FORBIDDEN from repeating the options as a markdown table or list. Repeating the details is a failure."
         labels={{
           title: "ParkAndSave",
